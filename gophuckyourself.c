@@ -60,8 +60,8 @@ int classify_ext(const char *ext) {
 	uint32_t hash = 0;
 	if (!ext || !*ext) return '9'; // binary
 
-	for(i = 0; i < 4; ++i) {
-		unsigned c = *ext++;
+	for(i = 0; i < 4; ++i, ++ext) {
+		unsigned c = *ext;
 		if (!c) break;
 		hash = hash << 8;
 		hash |= (c | 0x20);
