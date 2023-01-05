@@ -167,42 +167,6 @@ void send_text(int fd) {
 	fwrite(".\r\n", 3, 1, stdout);
 	free(buffer);
 	fclose(f);
-
-	#if 0
-	char buffer[4096];
-	int cr = 1;
-
-	for(;;) {
-		int i;
-		int j;
-
-		ssize_t n = read(fd, buffer, sizeof(buffer));
-		if (n < 0) break;
-		if (n == 0) break;
-
-
-
-		for (i = 0, j = 0; i < n; ++i) {
-			if (buffer[i] == '\n') {
-				write(STDOUT_FILENO, buffer + j, i - j);
-				write(STDOUT_FILENO, "\r\n", 2);
-				j = i + 1;
-			}
-		}
-		if (j < i) {
-			write(STDOUT_FILENO, buffer + j, i - j);
-			cr = false;
-		}
-		else {
-			cr = true;
-		}
-
-
-	}
-	if (!cr) write(STDOUT_FILENO, "\r\n", 2);
-	write(STDOUT_FILENO, ".\r\n", 3);
-	close(fd);
-	#endif
 }
 
 void send_gophermap(int fd) {
