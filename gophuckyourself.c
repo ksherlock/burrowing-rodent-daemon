@@ -103,7 +103,10 @@ int classify_ext(const char *ext) {
 	default:
 		return '9';
 	}
-#undef _
+#undef _1
+#undef _2
+#undef _3
+#undef _4
 }
 
 const char *extname(const char *cp) {
@@ -169,7 +172,22 @@ void send_text(int fd) {
 	fclose(f);
 }
 
-void send_gophermap(int fd) {
+void tab_split_4(char *in, char **out) {
+
+	int i;
+
+	for (i = 0; i < 4; ++i) out[i] = NULL;
+
+	for (i = 0; i < 4; ++i) {
+		char *tmp = strchr(in, '\t');
+		out[i] = *in == '\t' ? NULL : in;
+		if (!tmp) break;
+		*tmp = 0;
+		in = tmp+1;
+	}
+}
+
+void send_gophermap(int fd, const char *path) {
 
 	FILE *f;
 	char *buffer = 0;
@@ -196,8 +214,33 @@ void send_gophermap(int fd) {
 		if (!memchr(buffer, '\t', len)) {
 			fprintf(stdout, "i%s", buffer);
 		} else {
-			// todo - split up, insert selector/host/port if missing
-			fwrite(buffer, len, 1, stdout);
+
+			char *tabs[4];
+			char *cp;
+
+			tab_split_4(buffer, tabs);
+
+			// type + user name.
+			if (!tabs[0]) continue;
+			fprintf(stdout, "%s", tabs[0]);
+
+			// selector.
+			// if not provided, use user name.
+			// if not absolute, make it so.
+			cp = tabs[1] ? tabs[1] : tabs[0] + 1;
+			if (*cp == '/')
+				fprintf(stdout, "\t%s", cp);
+			else if (*path)
+				fprintf(stdout, "\t/%s/%s", path, cp);
+			else
+				fprintf(stdout, "\t/%s", cp);
+
+			// host
+			fprintf(stdout, "\t%s", tabs[2] ? tabs[2] : host);
+
+			// port
+			if (tabs[3]) fprintf(stdout, "\t%s", tabs[3]);
+			else fprintf(stdout, "\t%u", port);
 		}
 		fwrite("\r\n", 2, 1, stdout);
 	}
@@ -216,6 +259,22 @@ void send_directory(int fd, char *path) {
 	struct stat st;
 	int ok;
 	int type;
+	int gmfd;
+
+
+	if (fchdir(fd) < 0) {
+		close(fd);
+		fputs("3file access error\r\n", stdout);
+		return;
+	}
+
+	gmfd = openat(fd, "gophermap", O_RDONLY|O_NONBLOCK);
+	if (gmfd >= 0) {
+		send_gophermap(gmfd, path);
+		close(fd);
+		return;
+	}
+
 
 	dp = fdopendir(fd);
 
@@ -229,7 +288,7 @@ void send_directory(int fd, char *path) {
 		type = classify(&st, d->d_name);
 		if (type < 0) continue;
 
-		fprintf(stdout, "%c%s\t%s/%s\t%s\t%d\r\n",
+		fprintf(stdout, "%c%s\t/%s/%s\t%s\t%d\r\n",
 			type, d->d_name, path, d->d_name, host, port
 		);
 
@@ -297,6 +356,7 @@ int main(int argc, char **argv) {
 	if (cp) {
 		int size = strlen(cp);
 		while (size && (cp[size-1] == '\r' || cp[size-1] == '\n')) --size;
+		while (size && cp[size-1] == '/') --size;
 		cp[size] = 0;
 
 		while (*cp == '/') {
