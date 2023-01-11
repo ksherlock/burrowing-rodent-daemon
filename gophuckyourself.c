@@ -277,9 +277,9 @@ void send_gophermap(int fd, const char *path) {
 			if (tabs[3]) fprintf(stdout, "\t%s", tabs[3]);
 			else fprintf(stdout, "\t%u", port);
 		}
-		fwrite("\r\n", 2, 1, stdout);
+		fputs("\r\n", stdout);
 	}
-	fwrite(".\r\n", 3, 1, stdout);
+	fputs(".\r\n", stdout);
 	free(buffer);
 	fclose(f);
 
@@ -332,6 +332,7 @@ void send_directory(int fd, char *path) {
 
 		fprintf(stdout,"\t%s\t%d\r\n", host, port);
 	}
+	fputs(".\r\n", stdout);
 	closedir(dp);
 }
 
