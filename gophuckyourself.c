@@ -8,6 +8,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
 /* gopher server. */
 /* inetd, tcpserver-style; read stdin, write stdout
 
@@ -364,6 +367,33 @@ char *xgethostname(void) {
 	return buffer;
 }
 
+/* set the host/port variables */
+void whoami(int fd) {
+
+	struct sockaddr_storage sa;
+	socklen_t len;
+
+	if (!port) port = parse_port(getenv("TCPLOCALPORT"));
+	if (!host) host = getenv("TCPLOCALIP");
+
+	if (host && port) return;
+
+	len = sizeof(sa);
+	if (getsockname(fd, (struct sockaddr *)&sa, &len) == 0 && sa.ss_family == PF_INET) {
+		static char buffer[4*4];
+
+		struct sockaddr_in *sin = (struct sockaddr_in *)&sa;
+
+		if (!host) host = inet_ntop(AF_INET, &sin->sin_addr, buffer, sizeof(buffer));
+		if (!port) port = sin->sin_port;
+	}
+
+	if (!port) port = 70;
+	if (!host) host = xgethostname();
+	if (!host) host = "localhost";
+}
+
+
 /* gophuckyourself [options] rootpath */
 int main(int argc, char **argv) {
 
@@ -374,9 +404,6 @@ int main(int argc, char **argv) {
 	int c;
 	int type;
 	int fd;
-
-	port = parse_port(getenv("TCPLOCALPORT"));
-	host = getenv("TCPLOCALIP");
 
 	while ((c = getopt(argc, argv, "p:h:")) != -1) {
 		switch(c) {
@@ -394,10 +421,7 @@ int main(int argc, char **argv) {
 	argc -= optind;
 	argv += optind;
 
-	if (!port) port = 70;
-	if (!host) host = xgethostname();
-	if (!host) host = "localhost";
-
+	whoami(STDIN_FILENO);
 
 	cp = fgets(buffer, sizeof(buffer), stdin);
 	if (cp) {
