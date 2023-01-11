@@ -46,13 +46,6 @@ int check_path(const char *cp) {
 	}
 }
 
-int check_stat(struct stat *st) {
-
-	mode_t mode = st->st_mode;
-	if (!(mode & S_IWOTH)) return -1;
-	if (S_ISDIR(mode) || S_ISREG(mode)) return 0;
-	return -1;
-}
 
 int classify_ext(const char *ext) {
 
@@ -86,7 +79,7 @@ int classify_ext(const char *ext) {
 	case _3('g','i','f'):
 		return 'g';
 
-/* non-canonical */
+	/* non-canonical */
 	case _3('p','d','f'):
 		return 'd';
 
@@ -121,11 +114,13 @@ const char *extname(const char *cp) {
 	}
 }
 
+/*
+ *
+ */
 int classify(struct stat *st, const char *name) {
 
 	mode_t mode = st->st_mode;
-	//if (!(mode & S_IWOTH)) return -1;
-
+	if ((mode & 0444) != 0444) return -1;
 
 	if (S_ISDIR(mode)) return '1';
 	if (!S_ISREG(mode)) return -1;
@@ -293,7 +288,6 @@ void send_gophermap(int fd, const char *path) {
 
 
 void send_directory(int fd, char *path) {
-	// todo -- check .gophermap file?
 
 	DIR *dp;
 	struct dirent *d;
@@ -307,14 +301,16 @@ void send_directory(int fd, char *path) {
 		fputs("3file access error\r\n", stdout);
 		return;
 	}
+	// TODO - consider .banner support ; read and send as 'i' lines.
 
-	gmfd = openat(fd, "gophermap", O_RDONLY|O_NONBLOCK);
+	gmfd = open("gophermap", O_RDONLY|O_NONBLOCK);
 	if (gmfd >= 0) {
-		send_gophermap(gmfd, path);
-		close(fd);
-		return;
+		if ((fstat(gmfd, &st) == 0) && S_ISREG(st.st_mode) && ((st.st_mode & 0444) == 0444)) {
+			send_gophermap(gmfd, path);
+			close(fd);
+			return;
+		}
 	}
-
 
 	dp = fdopendir(fd);
 
@@ -328,11 +324,14 @@ void send_directory(int fd, char *path) {
 		type = classify(&st, d->d_name);
 		if (type < 0) continue;
 
-		fprintf(stdout, "%c%s\t/%s/%s\t%s\t%d\r\n",
-			type, d->d_name, path, d->d_name, host, port
-		);
+		fprintf(stdout, "%c%s\t", type, d->d_name);
 
+		if (*path)
+			fprintf(stdout, "/%s/%s", path, d->d_name);
+		else
+			fprintf(stdout, "/%s", d->d_name);
 
+		fprintf(stdout,"\t%s\t%d\r\n", host, port);
 	}
 	closedir(dp);
 }
@@ -367,7 +366,6 @@ char *xgethostname(void) {
 
 /* gophuckyourself [options] rootpath */
 int main(int argc, char **argv) {
-
 
 	char buffer[4096];
 	struct stat st;
