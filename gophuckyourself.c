@@ -21,7 +21,7 @@ TCPREMOTEPORT
 */
 
 
-char *host = NULL;
+const char *host = NULL;
 unsigned port = 0;
 
 
@@ -122,8 +122,6 @@ const char *extname(const char *cp) {
 }
 
 int classify(struct stat *st, const char *name) {
-
-	const char *cp;
 
 	mode_t mode = st->st_mode;
 	//if (!(mode & S_IWOTH)) return -1;
@@ -257,7 +255,6 @@ void send_directory(int fd, char *path) {
 	DIR *dp;
 	struct dirent *d;
 	struct stat st;
-	int ok;
 	int type;
 	int gmfd;
 
