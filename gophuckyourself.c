@@ -371,21 +371,17 @@ char *xgethostname(void) {
 void whoami(int fd) {
 
 	struct sockaddr_storage sa;
-	socklen_t len;
+	socklen_t len = sizeof(sa);
 
 	if (!port) port = parse_port(getenv("TCPLOCALPORT"));
 	if (!host) host = getenv("TCPLOCALIP");
 
-	if (host && port) return;
-
-	len = sizeof(sa);
-	if (getsockname(fd, (struct sockaddr *)&sa, &len) == 0 && sa.ss_family == PF_INET) {
+	if (!host && getsockname(fd, (struct sockaddr *)&sa, &len) == 0 && sa.ss_family == PF_INET) {
 		static char buffer[4*4];
 
 		struct sockaddr_in *sin = (struct sockaddr_in *)&sa;
 
-		if (!host) host = inet_ntop(AF_INET, &sin->sin_addr, buffer, sizeof(buffer));
-		if (!port) port = sin->sin_port;
+		host = inet_ntop(AF_INET, &sin->sin_addr, buffer, sizeof(buffer));
 	}
 
 	if (!port) port = 70;
