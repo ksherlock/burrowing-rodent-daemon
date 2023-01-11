@@ -153,10 +153,8 @@ void send_text(int fd) {
 		len = getline(&buffer, &cap, f);
 		if (len <= 0) break;
 		if (buffer[len-1] == '\n') --len;
-		#if 0
-		if (len == 1 && buffer[0] == '.')
+		if (buffer[0] == '.')
 			fwrite(".", 1, 1, stdout);
-		#endif
 		fwrite(buffer, len, 1, stdout);
 		fwrite("\r\n", 2, 1, stdout);
 	}
@@ -259,6 +257,7 @@ void send_gophermap(int fd, const char *path) {
 			char *tabs[4];
 			char *cp;
 
+			if (buffer[0] == '.') continue;
 			tab_split_4(buffer, tabs);
 
 			// type + user name.
