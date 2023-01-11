@@ -185,6 +185,54 @@ void tab_split_4(char *in, char **out) {
 	}
 }
 
+void print_path(const char *parent, const char *leaf) {
+	
+	int a;
+	unsigned c;
+
+	if (*leaf == '/') {
+		fputs(leaf, stdout);
+		return;
+	}
+
+	a = strlen(parent);
+
+	// handle leading . and ..
+	for(;;) {
+		if (*leaf != '.') break;
+		c = leaf[1];
+		if (c == 0) {
+			++leaf;
+		}
+
+		if (c == '/') {
+			leaf += 2;
+			continue;
+		}
+
+		if (c == '.') {
+			c = leaf[2];
+			if (c == 0) {
+				leaf += 2;
+
+				while (a > 0 && parent[a-1] != '/') --a;
+				if (a) --a;
+
+			}
+			if (c == '/') {
+				leaf += 3;
+
+				while (a > 0 && parent[a-1] != '/') --a;
+				if (a) --a;
+				continue;
+			}
+		}
+		break;
+	}
+	if (a) fprintf(stdout, "/%.*s", a, parent);
+	if (*leaf) fprintf(stdout, "/%s", leaf);
+}
+
 void send_gophermap(int fd, const char *path) {
 
 	FILE *f;
@@ -220,18 +268,13 @@ void send_gophermap(int fd, const char *path) {
 
 			// type + user name.
 			if (!tabs[0]) continue;
-			fprintf(stdout, "%s", tabs[0]);
+			fprintf(stdout, "%s\t", tabs[0]);
 
 			// selector.
-			// if not provided, use user name.
+			// if not provided, use file name.
 			// if not absolute, make it so.
 			cp = tabs[1] ? tabs[1] : tabs[0] + 1;
-			if (*cp == '/')
-				fprintf(stdout, "\t%s", cp);
-			else if (*path)
-				fprintf(stdout, "\t/%s/%s", path, cp);
-			else
-				fprintf(stdout, "\t/%s", cp);
+			print_path(path, cp);
 
 			// host
 			fprintf(stdout, "\t%s", tabs[2] ? tabs[2] : host);
@@ -369,7 +412,6 @@ int main(int argc, char **argv) {
 			++cp;
 			--size;
 		}
-
 	}
 
 
