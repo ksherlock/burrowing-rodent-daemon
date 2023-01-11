@@ -317,6 +317,14 @@ int parse_port(const char *cp) {
 	return 0;
 }
 
+char *xgethostname(void) {
+	/* gethostname() will not be null terminated if it's too big for the buffer */
+	static char buffer[64];
+	if (gethostname(buffer, sizeof(buffer)) < 0) return NULL;
+	if (!memchr(buffer, 0, sizeof(buffer))) return NULL;
+	return buffer;
+}
+
 /* gophuckyourself [options] rootpath */
 int main(int argc, char **argv) {
 
@@ -349,6 +357,7 @@ int main(int argc, char **argv) {
 	argv += optind;
 
 	if (!port) port = 70;
+	if (!host) host = xgethostname();
 	if (!host) host = "localhost";
 
 
