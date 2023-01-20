@@ -11,6 +11,24 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
+#if defined(__APPLE__)
+#include <sys/xattr.h>
+#endif
+
+#if defined(__linux__)
+#include <sys/xattr.h>
+#endif
+
+#if defined(__FreeBSD__) || defined(__NetBSD__)
+#include <sys/types.h>
+#include <sys/extattr.h>
+#endif
+
+#if defined(_AIX)
+#include <sys/ea.h>
+#endif
+
+
 /* gopher server. */
 /* inetd, tcpserver-style; read stdin, write stdout
 
@@ -62,7 +80,7 @@ int classify_ext(const char *ext) {
 		hash = hash << 8;
 		hash |= (c | 0x20);
 	}
-	if (*ext) return '9'; // binary
+	if (*ext) return -1;
 
 #define _1(a) (a)
 #define _2(a,b) ( ((a) << 8) | (b) )
@@ -97,7 +115,7 @@ int classify_ext(const char *ext) {
 		return 'h';
 
 	default:
-		return '9';
+		return -1;
 	}
 #undef _1
 #undef _2
@@ -117,18 +135,66 @@ const char *extname(const char *cp) {
 	}
 }
 
+// https://www.freedesktop.org/wiki/CommonExtendedAttributes/
+
+int classify_mime(const char *path) {
+
+	char buffer[64];
+	int size = -1;
+
+	#if defined(__APPLE__)
+	/* check the finder info file type for TEXT */
+	size = getxattr(path, XATTR_FINDERINFO_NAME, buffer, 32, 0, 0);
+	if (size >= 4 && memcmp("TEXT", buffer, 4) == 0)
+		return '0';
+	size = getxattr(path, "user.mime_type", buffer, sizeof(buffer), 0, 0);
+	#endif
+
+	#if defined(__linux__)
+	size = getxattr(path, "user.mime_type", buffer, sizeof(buffer) - 1);
+	#endif
+
+	#if defined(__FreeBSD__) || defined(__NetBSD__)
+	size = extattr_get_file(path, EXTATTR_NAMESPACE_USER, "user.mime_type", buffer, sizeof(buffer));
+	if (size < 0)
+		size = extattr_get_file(path, EXTATTR_NAMESPACE_USER, "mime_type", buffer, sizeof(buffer));
+	#endif
+
+	#if defined(_AIX)
+	size = getea(path, "user.mime_type", buffer, sizeof(buffer) - 1);
+	#endif
+
+	if (size < 0) return -1;
+	// buffer[size] = 0;
+	if (size == 9 && memcmp(buffer, "text/html", 9) == 0) return 'h';
+	if (size == 9 && memcmp(buffer, "image/png", 9) == 0) return 'p';
+	if (size == 9 && memcmp(buffer, "image/gif", 9) == 0) return 'g';
+	if (size == 15 && memcmp(buffer, "application/rtf", 12) == 0) return 't';
+	if (size == 15 && memcmp(buffer, "application/pdf", 12) == 0) return 'd';
+
+	if (size >= 5 && memcmp(buffer, "text/", 5) == 0) return '0';
+	if (size >= 12 && memcmp(buffer, "application/", 12) == 0) return '9';
+	return -1;
+}
+
 /*
  *
  */
 int classify(struct stat *st, const char *name) {
 
+	int rv;
 	mode_t mode = st->st_mode;
 	if ((mode & 0444) != 0444) return -1;
 
 	if (S_ISDIR(mode)) return '1';
 	if (!S_ISREG(mode)) return -1;
 
-	return classify_ext(extname(name));
+	rv = classify_mime(name);
+	if (rv >= 0) return rv;
+
+	rv = classify_ext(extname(name));
+	if (rv >= 0) return rv;
+	return '9'; /* default - binary */
 }
 
 void send_binary(int fd) {
