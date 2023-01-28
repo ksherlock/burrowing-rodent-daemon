@@ -406,7 +406,7 @@ void send_directory(int fd, char *path) {
 }
 
 void usage(int rv) {
-	fputs("gophuckyourself [-h hostname] [-p port] [root directory]\n", stdout);
+	fputs("gopherd [-h hostname] [-p port] [root directory]\n", stdout);
 	exit(rv);
 }
 
@@ -456,7 +456,7 @@ void whoami(int fd) {
 }
 
 
-/* gophuckyourself [options] rootpath */
+/* gopherd [options] rootpath */
 int main(int argc, char **argv) {
 
 	char buffer[4096];
