@@ -29,6 +29,10 @@
 #endif
 
 
+// sorted directory entries.
+#define USE_SCANDIR
+
+
 /* gopher server. */
 /* inetd, tcpserver-style; read stdin, write stdout
 
@@ -354,19 +358,41 @@ void send_gophermap(int fd, const char *path) {
 
 }
 
+#ifdef USE_SCANDIR
+int dir_select(const struct dirent *d) {
+	struct stat st;
+	mode_t mode;
+
+	if (d->d_name[0] == '.') return 0;
+	if (strchr(d->d_name, '\t')) return 0;
+
+	if (stat(d->d_name, &st) < 0) return 0;
+
+	mode = st.st_mode;
+	if ((mode & 0444) != 0444) return 0;
+
+	return S_ISDIR(mode) || S_ISREG(mode);
+}
+#endif
 
 void send_directory(int fd, char *path) {
 
-	DIR *dp;
 	struct dirent *d;
 	struct stat st;
 	int type;
 	int gmfd;
 
+#ifdef USE_SCANDIR
+	struct dirent **dirents = NULL;
+	int count;
+#else
+	DIR *dp;
+#endif
+
 
 	if (fchdir(fd) < 0) {
 		close(fd);
-		fputs("3file access error\r\n", stdout);
+		fputs("3file access error\r\n.\r\n", stdout);
 		return;
 	}
 	// TODO - consider .banner support ; read and send as 'i' lines.
@@ -380,29 +406,58 @@ void send_directory(int fd, char *path) {
 		}
 	}
 
-	dp = fdopendir(fd);
+#ifdef USE_SCANDIR
+	count = scandir(".", &dirents, dir_select, alphasort);
+	if (count < 0) {
+		fputs("3file access error\r\n", stdout);
+	} else {
+		int i;
+		for (i = 0; i < count; ++i) {
+			d = dirents[i];
 
-	for(;;) {
-		d = readdir(dp);
-		if (!d) break;
-		if (d->d_name[0] == '.') continue;
-		if (strchr(d->d_name, '\t')) continue;
+			if (stat(d->d_name, &st) < 0) continue;
+			type = classify(&st, d->d_name);
+			if (type < 0) continue;
 
-		if (stat(d->d_name, &st) < 0) continue;
-		type = classify(&st, d->d_name);
-		if (type < 0) continue;
+			fprintf(stdout, "%c%s\t", type, d->d_name);
 
-		fprintf(stdout, "%c%s\t", type, d->d_name);
+			if (*path)
+				fprintf(stdout, "/%s/%s", path, d->d_name);
+			else
+				fprintf(stdout, "/%s", d->d_name);
 
-		if (*path)
-			fprintf(stdout, "/%s/%s", path, d->d_name);
-		else
-			fprintf(stdout, "/%s", d->d_name);
-
-		fprintf(stdout,"\t%s\t%d\r\n", host, port);
+			fprintf(stdout,"\t%s\t%d\r\n", host, port);
+		}
 	}
+	free(dirents);
+#else
+	dp = fdopendir(fd);
+	if (dp == NULL) {
+		fputs("3file access error\r\n", stdout);
+	} else {
+		for(;;) {
+			d = readdir(dp);
+			if (!d) break;
+			if (d->d_name[0] == '.') continue;
+			if (strchr(d->d_name, '\t')) continue;
+
+			if (stat(d->d_name, &st) < 0) continue;
+			type = classify(&st, d->d_name);
+			if (type < 0) continue;
+
+			fprintf(stdout, "%c%s\t", type, d->d_name);
+
+			if (*path)
+				fprintf(stdout, "/%s/%s", path, d->d_name);
+			else
+				fprintf(stdout, "/%s", d->d_name);
+
+			fprintf(stdout,"\t%s\t%d\r\n", host, port);
+		}
+		closedir(dp);
+	}
+#endif
 	fputs(".\r\n", stdout);
-	closedir(dp);
 }
 
 void usage(int rv) {
@@ -502,34 +557,34 @@ int main(int argc, char **argv) {
 	if (!cp) cp = "";
 
 	if (check_path(cp) < 0) {
-		fputs("3bad selector\r\n", stdout);
+		fputs("3bad selector\r\n.\r\n", stdout);
 		exit(0);
 	}
 
 	if (argc) {
 		char *root = argv[0];
 		if (chdir(root) < 0) {
-			fputs("3bad root directory\r\n", stdout);
+			fputs("3bad root directory\r\n.\r\n", stdout);
 			exit(0);
 		}
 	}
 
 	fd = open(*cp ? cp : ".", O_RDONLY|O_NONBLOCK);
 	if (fd < 0) {
-		fputs("3file access error\r\n", stdout);
+		fputs("3file access error\r\n.\r\n", stdout);
 		exit(0);
 	}
 
 	if (fstat(fd, &st) < 0) {
 		close(fd);
-		fputs("3file access error\r\n", stdout);
+		fputs("3file access error\r\n.\r\n", stdout);
 		exit(0);
 	}
 
 	type = classify(&st, cp);
 	if (type < 0) {
 		close(fd);
-		fputs("3file access error\r\n", stdout);
+		fputs("3file access error\r\n.\r\n", stdout);
 		exit(0);	
 	}
 
