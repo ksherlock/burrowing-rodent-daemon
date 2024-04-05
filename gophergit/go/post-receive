@@ -1,0 +1,3 @@
+#!/bin/sh
+
+git-make-gophermap "/path/to/working/tree"
