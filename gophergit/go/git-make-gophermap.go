@@ -2,6 +2,11 @@ package main
 import ("os";"os/exec";"fmt";"log";"sort";"strings")
 
 
+const kGopherDir byte = '1'
+const kGopherText byte = '0'
+const kGopherBin byte = '9'
+
+
 var exclude map[string]int
 
 func sanitize_string(s string) string {
@@ -39,37 +44,45 @@ func sanitize_string(s string) string {
 }
 
 
-func is_binary(path string) bool {
-	/* git checks the first 8000 bytes for a nul char */
-	/* since gopher text files are line-oriented, we check for \r as well. */
 
-	/* todo -- `run git check-attr --all` to check .gitattributes? */
+func gopher_type(path string) byte {
+	fi, err := os.Stat(path)
+	if err != nil { return kGopherBin }
+	if fi.IsDir() { return kGopherDir }
+	if !fi.Mode().IsRegular() { return 0 }
+
+	if fi.Size() == 0 { return kGopherText }
+
 
 	f, err := os.Open(path)
-	if err != nil { return true; }
+
+	if err != nil { return kGopherBin }
 
 
 	buffer := make([]byte, 4096)
 	n, err := f.Read(buffer)
 	f.Close()
 
-	if err != nil { return true }
+	if err != nil { return kGopherBin }
 
 	// cr := 0
 	lf := 0
 	for i := 0; i < n; i++ {
 		b := buffer[i]
 
+		/* assume ascii? */
+		// if b > 0x7f { return kGopherBin }
 		switch b {
-		case 0x00: return true
+		case 0x00: return kGopherBin
 		case 0x0a: lf++
-		case 0x0d: return true
+		case 0x0d: return kGopherBin
 		}
 
 	}
-	if lf == 0 { return true }
+	if lf == 0 { return kGopherBin }
 
-	return false;
+	return kGopherText;
+
 
 }
 
@@ -80,17 +93,16 @@ func build_gopher_map(path string) {
 		log.Fatal("open ", path, ": ", err)
 	}
 
-	info, err := f.Readdir(-1)
+	names, err := f.Readdirnames(-1)
 	f.Close()
 
 	if err != nil {
-		log.Print("readdir ", path,": ", err)
+		log.Print("readdirnames ", path,": ", err)
 		return
 	}
 
-
-	sort.Slice(info, func(i, j int) bool {
-		return info[i].Name() < info[j].Name()
+	sort.Slice(names, func(i, j int) bool {
+		return names[i] < names[j]
 	})
 
 	f, err = os.Create(path + "/gophermap", )
@@ -101,20 +113,24 @@ func build_gopher_map(path string) {
 
 	dirs := make([]string, 0, 10)
 
-	for _, fi := range(info) {
+	maxlen := 16
+	for _, name := range(names) {
+		l := len(name)
+		if l > maxlen && l < 40 { maxlen = l }
+	}
 
-		name := fi.Name()
+	// if maxlen > 20 { maxlen = 20 }
+
+	for _, name := range(names) {
+
 		if exclude[name] != 0 {
 			continue
 		}
 
 		/* should use .gitattributes to check if a file is binary */
-		t := '0'
-		if fi.IsDir() {
+		t := gopher_type(path + "/" + name)
+		if t == kGopherDir {
 			dirs = append(dirs, name)
-			t = '1'
-		} else if is_binary(path + "/" + name) {
-			t = '9'
 		}
 
 		cmd := exec.Command("git", "log", "-1", "--pretty=format:%s", name)
@@ -125,7 +141,7 @@ func build_gopher_map(path string) {
 			comment = sanitize_string(string(bb))
 		}
 
-		f.WriteString(fmt.Sprintf("%c%-16s %s\t%s\n", t, name, comment, name))
+		f.WriteString(fmt.Sprintf("%c%-*s %s\t%s\n", t, maxlen, name, comment, name))
 	}
 	f.Close()
 
@@ -148,7 +164,7 @@ func main() {
 
 	os.Setenv("GIT_WORK_TREE", worktree)
 
-	exclude = map[string]int{"gophermap": 1, ".git", ".": 1, "..": 1}
+	exclude = map[string]int{"gophermap": 1, ".git": 1, ".": 1, "..": 1}
 
 
 	cmd := exec.Command("git", "checkout", "-f")
