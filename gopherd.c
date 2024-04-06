@@ -1,6 +1,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -516,11 +517,17 @@ void whoami(int fd) {
 }
 
 
+void sig_alarm_handler(int sig, siginfo_t *info, void *uap) {
+	fail("3read timeout");
+}
+
 /* gopherd [options] rootpath */
 int main(int argc, char **argv) {
 
 	char buffer[4096];
 	struct stat st;
+
+	struct sigaction sa = {};
 
 	char *cp;
 	int c;
@@ -545,7 +552,13 @@ int main(int argc, char **argv) {
 
 	whoami(STDIN_FILENO);
 
+	sa.sa_sigaction = sig_alarm_handler;
+	sa.sa_flags = SA_SIGINFO;
+	sigaction(SIGALRM, &sa, NULL);
+
+	alarm(5);
 	cp = fgets(buffer, sizeof(buffer), stdin);
+	alarm(0);
 	if (cp) {
 		int size = strlen(cp);
 		while (size && (cp[size-1] == '\r' || cp[size-1] == '\n')) --size;
