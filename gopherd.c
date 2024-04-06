@@ -50,6 +50,12 @@ const char *host = NULL;
 unsigned port = 0;
 
 
+void fail(const char *message) {
+	write(STDOUT_FILENO, message, strlen(message));
+	write(STDOUT_FILENO, "\r\n.\r\n", 5);
+	exit(1);
+}
+
 int check_path(const char *cp) {
 	// check for .. path components.
 	int i;
@@ -392,8 +398,7 @@ void send_directory(int fd, char *path) {
 
 	if (fchdir(fd) < 0) {
 		close(fd);
-		fputs("3file access error\r\n.\r\n", stdout);
-		return;
+		fail("3file access error");
 	}
 	// TODO - consider .banner support ; read and send as 'i' lines.
 
@@ -409,7 +414,7 @@ void send_directory(int fd, char *path) {
 #ifdef USE_SCANDIR
 	count = scandir(".", &dirents, dir_select, alphasort);
 	if (count < 0) {
-		fputs("3file access error\r\n", stdout);
+		fail("3file access error");
 	} else {
 		int i;
 		for (i = 0; i < count; ++i) {
@@ -433,7 +438,7 @@ void send_directory(int fd, char *path) {
 #else
 	dp = fdopendir(fd);
 	if (dp == NULL) {
-		fputs("3file access error\r\n", stdout);
+		fail("3file access error");
 	} else {
 		for(;;) {
 			d = readdir(dp);
@@ -557,35 +562,30 @@ int main(int argc, char **argv) {
 	if (!cp) cp = "";
 
 	if (check_path(cp) < 0) {
-		fputs("3bad selector\r\n.\r\n", stdout);
-		exit(0);
+		fail("3bad selector");
 	}
 
 	if (argc) {
 		char *root = argv[0];
 		if (chdir(root) < 0) {
-			fputs("3bad root directory\r\n.\r\n", stdout);
-			exit(0);
+			fail("3bad root directory");
 		}
 	}
 
 	fd = open(*cp ? cp : ".", O_RDONLY|O_NONBLOCK);
 	if (fd < 0) {
-		fputs("3file access error\r\n.\r\n", stdout);
-		exit(0);
+		fail("3file access error");
 	}
 
 	if (fstat(fd, &st) < 0) {
 		close(fd);
-		fputs("3file access error\r\n.\r\n", stdout);
-		exit(0);
+		fail("3file access error");
 	}
 
 	type = classify(&st, cp);
 	if (type < 0) {
 		close(fd);
-		fputs("3file access error\r\n.\r\n", stdout);
-		exit(0);	
+		fail("3file access error");
 	}
 
 	switch(type) {
