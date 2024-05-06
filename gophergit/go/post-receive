@@ -1,3 +1,4 @@
 #!/bin/sh
 
+export GIT_DIR=`realpath "$GIT_DIR"`
 git-make-gophermap "/path/to/working/tree"
