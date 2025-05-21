@@ -1,0 +1,9 @@
+[Unit]
+Description=Gopher server
+After=local-fs.target
+
+[Service]
+ExecStart=-/usr/local/bin/gopherd -h gopher.example.com /var/gopher
+User=gopher
+StandardInput=socket
+

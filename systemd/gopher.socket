@@ -1,0 +1,10 @@
+[Unit]
+Description=Gopher server socket
+
+[Socket]
+ListenStream=70
+Accept=true
+
+[Install]
+WantedBy=sockets.target
+
